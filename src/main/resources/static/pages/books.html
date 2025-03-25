@@ -212,6 +212,39 @@
 
             </div>
 
+            <!-- 文件上传和下载部分 -->
+            <div class="upload-section">
+                <el-upload
+                    class="upload-demo"
+                    drag
+                    action="/books/upload"
+                    :on-success="handleUploadSuccess"
+                    :on-error="handleUploadError"
+                    :file-list="fileList"
+                    :show-file-list="true">
+                    <i class="el-icon-upload"></i>
+                    <div class="el-upload__text">将电子书拖到此处，或<em>点击上传</em></div>
+                </el-upload>
+
+                <!-- 文件列表显示 -->
+                <div class="file-list" v-if="fileList.length > 0">
+                    <h3>已上传文件列表：</h3>
+                    <el-table :data="fileList" style="width: 100%">
+                        <el-table-column prop="name" label="文件名"></el-table-column>
+                        <el-table-column label="操作" width="180">
+                            <template slot-scope="scope">
+                                <el-button 
+                                    size="mini" 
+                                    type="primary" 
+                                    @click="handleDownload(scope.row.name)">
+                                    下载
+                                </el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </div>
+            </div>
+
         </div>
 
     </div>
@@ -238,6 +271,8 @@
             dialogFormVisible: false,//添加表单是否可见
             dialogFormVisibleEdit:false,//编辑表单是否可见
             formData: {},//表单数据
+            fileList: [],  // 文件列表
+            currentFile: null,  // 当前文件
             rules: {//校验规则
                 type: [{ required: true, message: '图书类别为必填项', trigger: 'blur' }],
                 name: [{ required: true, message: '图书名称为必填项', trigger: 'blur' }]
@@ -406,23 +441,70 @@
                 });
             },
 
-            handleUploadSuccess(response) {
+            // 修改后的上传成功处理函数
+            handleUploadSuccess(response, file) {
                 if(response.flag) {
-                    this.$message.success("上传成功");
+                    this.currentFile = file;
+                    // 添加文件到列表
+                    this.fileList.push({
+                        name: file.name,
+                        url: file.url
+                    });
+                    this.$message.success("文件 " + file.name + " 上传成功");
                 } else {
                     this.$message.error(response.msg || "上传失败");
                 }
             },
 
+            // 修改后的上传错误处理函数
             handleUploadError(error) {
                 console.error("Error uploading file:", error);
                 this.$message.error("上传失败：" + (error.response?.data?.msg || "服务器错误"));
             },
 
+            // 修改后的下载处理函数
+            handleDownload(fileName) {
+                if (!fileName) {
+                    this.$message.error("文件名不能为空");
+                    return;
+                }
+                // 创建一个隐藏的 a 标签来下载文件
+                const link = document.createElement('a');
+                link.href = `/books/download/${fileName}`;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
 
         }
     })
 
 </script>
+
+<style>
+/* 新增：样式调整 */
+.upload-section {
+    margin-top: 20px;
+    padding: 20px;
+    border-top: 1px solid #eee;
+}
+
+.file-list {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+
+.el-upload-dragger {
+    width: 360px;
+    margin-bottom: 20px;
+}
+
+.el-button {
+    margin-top: 10px;
+}
+</style>
 
 </html>

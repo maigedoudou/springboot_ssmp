@@ -1,24 +1,25 @@
 package com.donna.controller;
 
-
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.donna.domain.Book;
 import com.donna.service.IBookService;
+import com.donna.service.FtpService;
 import com.donna.utils.R;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
-
+import java.util.Map;
+import java.util.HashMap;
+import java.net.URLEncoder;
 
 @RestController
 @RequestMapping("/books")
@@ -29,6 +30,8 @@ public class BookController {
     @Autowired
     private IBookService bookService;
 
+    @Autowired
+    private FtpService ftpService;
 
     @GetMapping
     public R getAll(){
@@ -37,14 +40,10 @@ public class BookController {
 
     @PostMapping
     public R save(@RequestBody Book book) throws IOException {
-        // 记录接收到的数据
         logger.info("Received book data: {}", book);
-        
         try {
             if(book.getName().equals("123")) throw new IOException();
             boolean flag = bookService.saveBook(book);
-
-            // 打印添加成功或失败的信息
             if (flag) {
                 logger.info("Book saved successfully with ID: {}", book.getId());
                 return new R(true, "添加成功");
@@ -89,13 +88,11 @@ public class BookController {
             @RequestParam(required = false) String description
     ){
         try {
-            // 构建查询条件
             Book book = new Book();
             book.setType(type);
             book.setName(name);
             book.setDescription(description);
             
-            // 记录查询参数
             logger.info("Querying books with params: currentPage={}, pageSize={}, type={}, name={}, description={}",
                     currentPage, pageSize, type, name, description);
             
@@ -112,7 +109,6 @@ public class BookController {
             
             IPage<Book> page = bookService.getPage(currentPage, pageSize, queryWrapper);
             
-            //如果当前页码值大于总页码值，那么重新执行查询操作，使用最大页码值作为当前页码值
             if(currentPage > page.getPages()){
                 page = bookService.getPage((int)page.getPages(), pageSize, queryWrapper);
             }
@@ -124,8 +120,64 @@ public class BookController {
         }
     }
 
+    @PostMapping("/upload")
+    public R uploadEbook(@RequestParam("file") MultipartFile file) {
+        try {
+            File tempFile = File.createTempFile("upload-", file.getOriginalFilename());
+            file.transferTo(tempFile);
+            
+            ftpService.uploadFile(tempFile, file.getOriginalFilename());
+            
+            return new R(true, "文件上传成功");
+        } catch (IOException e) {
+            logger.error("Error uploading file: ", e);
+            return new R(false, "文件上传失败：" + e.getMessage());
+        }
+    }
 
+    @GetMapping("/download/{fileName}")
+    public void downloadEbook(@PathVariable String fileName, HttpServletResponse response) {
+        try {
+            File tempDir = new File("temp");
+            if (!tempDir.exists()) {
+                tempDir.mkdirs();
+            }
+            
+            String localFilePath = tempDir.getPath() + File.separator + fileName;
+            File localFile = new File(localFilePath);
+            
+            ftpService.downloadFile(fileName, localFilePath);
 
-
-
+            if (localFile.exists()) {
+                try {
+                    response.setContentType("application/octet-stream");
+                    String encodedFileName = URLEncoder.encode(fileName, "UTF-8").replaceAll("\\+", "%20");
+                    response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFileName);
+                    
+                    try (FileInputStream fis = new FileInputStream(localFile);
+                         OutputStream os = response.getOutputStream()) {
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = fis.read(buffer)) != -1) {
+                            os.write(buffer, 0, bytesRead);
+                        }
+                        os.flush();
+                    }
+                } finally {
+                    localFile.delete();
+                }
+            } else {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                response.getWriter().write("File not found");
+            }
+        } catch (IOException e) {
+            logger.error("Error downloading file: ", e);
+            try {
+                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                response.getWriter().write("Download failed: " + e.getMessage());
+            } catch (IOException ex) {
+                logger.error("Error writing error response: ", ex);
+            }
+        }
+    }
 }

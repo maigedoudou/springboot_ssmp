@@ -6,3 +6,14 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:root}
   server:
     port: 8080
+
+
+
+
+# FTP 服务器配置
+ftp:
+  server:
+    host: ${FTP_SERVER:ftp-server}
+    port: 21
+    username: ftpuser
+    password: ftpuser

@@ -13,7 +13,7 @@ import java.io.*;
 public class FTPUtil {
     private static final Logger logger = LoggerFactory.getLogger(FTPUtil.class);
 
-    @Value("${ftp.server.host:localhost}")
+    @Value("${ftp.server.host:ftp-server}")
     private String host;
 
     @Value("${ftp.server.port:21}")
@@ -31,8 +31,12 @@ public class FTPUtil {
     private FTPClient connectFTPServer() {
         FTPClient ftpClient = new FTPClient();
         try {
+            ftpClient.setConnectTimeout(5000); // 设置连接超时
             ftpClient.connect(host, port);
-            ftpClient.login(username, password);
+            if (!ftpClient.login(username, password)) {
+                logger.error("FTP login failed.");
+                return null;
+            }
             ftpClient.setFileType(FTPClient.BINARY_FILE_TYPE);
             ftpClient.setControlEncoding("UTF-8");
             
@@ -60,12 +64,17 @@ public class FTPUtil {
         try {
             boolean result = ftpClient.storeFile(remoteFileName, inputStream);
             inputStream.close();
-            ftpClient.logout();
-            ftpClient.disconnect();
             return result;
         } catch (IOException e) {
             logger.error("Could not upload file to FTP server.", e);
             return false;
+        } finally {
+            try {
+                ftpClient.logout();
+                ftpClient.disconnect();
+            } catch (IOException e) {
+                logger.error("Error disconnecting from FTP server.", e);
+            }
         }
     }
 
@@ -78,12 +87,17 @@ public class FTPUtil {
 
         try (FileOutputStream fos = new FileOutputStream(localFileName)) {
             boolean result = ftpClient.retrieveFile(remoteFileName, fos);
-            ftpClient.logout();
-            ftpClient.disconnect();
             return result;
         } catch (IOException e) {
             logger.error("Could not download file from FTP server.", e);
             return false;
+        } finally {
+            try {
+                ftpClient.logout();
+                ftpClient.disconnect();
+            } catch (IOException e) {
+                logger.error("Error disconnecting from FTP server.", e);
+            }
         }
     }
 
@@ -99,4 +113,4 @@ public class FTPUtil {
             return false;
         }
     }
-} 
+}

@@ -10,8 +10,12 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/ssm_db?serverTimezone=UTC
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=hsp
+      - FTP_SERVER=ftp-server
     depends_on:
       - mysql
+      - ftp-server
+    networks:
+      - app-network
 
   mysql:
     image: mysql:8.0
@@ -24,6 +28,30 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  ftp-server:
+    image: stilliard/pure-ftpd
+    container_name: ftp-server
+    ports:
+      - "2121:21"
+      - "30000-30009:30000-30009"
+    environment:
+      - PUBLICHOST=127.0.0.1
+      - FTP_USER_NAME=ftpuser
+      - FTP_USER_PASS=ftpuser
+      - FTP_USER_HOME=/home/ftpuser
+      - ADDED_FLAGS=-d -j -Y -P 127.0.0.1
+    volumes:
+      - ./ftp_data:/home/ftpuser
+    restart: always
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   mysql_data:
